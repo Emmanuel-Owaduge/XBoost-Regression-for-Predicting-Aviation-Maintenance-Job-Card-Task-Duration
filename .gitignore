@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Virtual environment
+.venv/
+
+# Reproducible/regenerable artifacts (see spec/architecture.md section 5 —
+# persisted for local inspection, not meant to be committed)
+data/generated/
+outputs/
+
+# OS
+.DS_Store
