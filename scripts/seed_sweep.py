@@ -1,4 +1,4 @@
-"""Multi-seed variance sweep for Chapter 5.
+"""Multi-seed variance sweep.
 
 Reimplements pipeline.main()'s steps 1-9 in-memory for a set of seeds, so
 we get real seed-to-seed variance instead of a single-seed point estimate.

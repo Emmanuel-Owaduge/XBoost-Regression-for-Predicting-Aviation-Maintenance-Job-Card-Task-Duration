@@ -1,4 +1,4 @@
-"""Hyperparameter-selection and timing sweep for Chapter 3, same 10 seeds as
+"""Hyperparameter-selection and timing sweep, same 10 seeds as
 scripts/seed_sweep.py. That script discarded rf_result/xgb_result after
 pulling test_metrics, so best_params_/timing were never persisted -- this
 captures them instead. Same seed-binding fix as seed_sweep.py: pass seed
