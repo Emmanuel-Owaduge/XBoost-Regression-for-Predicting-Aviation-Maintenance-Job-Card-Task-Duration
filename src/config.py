@@ -43,13 +43,13 @@ SPLIT_RATIOS = (0.70, 0.15, 0.15)  # train, calibration, test
 CV_FOLDS = 5
 RF_PARAM_GRID = {
     "model__n_estimators": [100, 200, 400],
-    "model__max_depth": [None, 5, 10],
-    "model__min_samples_leaf": [1, 3, 5],
+    "model__max_depth": [1, 2, 3, 5, 10],
+    "model__min_samples_leaf": [1, 3, 5, 15, 40],
 }
 XGB_PARAM_GRID = {
-    "model__n_estimators": [100, 200, 400],
-    "model__max_depth": [3, 5, 7],
-    "model__learning_rate": [0.03, 0.1, 0.3],
+    "model__n_estimators": [50, 100, 200, 400],
+    "model__max_depth": [1, 2, 3, 5, 7],
+    "model__learning_rate": [0.01, 0.03, 0.1, 0.3],
 }
 
 # --- Conformal prediction ---
