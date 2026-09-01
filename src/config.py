@@ -43,7 +43,7 @@ SPLIT_RATIOS = (0.70, 0.15, 0.15)  # train, calibration, test
 CV_FOLDS = 5
 RF_PARAM_GRID = {
     "model__n_estimators": [100, 200, 400],
-    "model__max_depth": [1, 2, 3, 5, 10],
+    "model__max_depth": [1, 2, 3, 5, 10, None],
     "model__min_samples_leaf": [1, 3, 5, 15, 40],
 }
 XGB_PARAM_GRID = {

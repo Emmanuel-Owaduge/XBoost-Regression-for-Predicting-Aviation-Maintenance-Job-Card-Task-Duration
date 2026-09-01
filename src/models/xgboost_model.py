@@ -1,9 +1,9 @@
-"""XGBoost: primary model, k-fold CV grid search."""
+"""XGBoost: primary model, TimeSeriesSplit CV grid search."""
 
 import time
 
 import pandas as pd
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 from sklearn.pipeline import Pipeline
 from xgboost import XGBRegressor
 
@@ -12,7 +12,7 @@ from src.features.preprocessing import build_preprocessor
 from src.models.common import ModelResult
 
 
-def fit_tuned(X_train: pd.DataFrame, y_train: pd.Series, cv: int = cfg.CV_FOLDS) -> ModelResult:
+def fit_tuned(X_train: pd.DataFrame, y_train: pd.Series, cv=TimeSeriesSplit(n_splits=5)) -> ModelResult:
     pipeline = Pipeline(
         [
             ("preprocess", build_preprocessor(scale_numeric=False)),
@@ -37,7 +37,8 @@ def fit_tuned(X_train: pd.DataFrame, y_train: pd.Series, cv: int = cfg.CV_FOLDS)
 
     best_idx = search.best_index_
     single_fit_time = float(search.cv_results_["mean_fit_time"][best_idx])
-    n_fits = len(search.cv_results_["params"]) * cv
+    n_splits = cv if isinstance(cv, int) else cv.get_n_splits()
+    n_fits = len(search.cv_results_["params"]) * n_splits
 
     return ModelResult(
         name="xgboost",
