@@ -25,6 +25,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+import numpy as np
+from scipy import stats
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import config as cfg
@@ -71,6 +74,12 @@ def run_one_seed(seed: int, scratch_dir: Path) -> dict:
     )
 
     test_metrics = {}
+    naive_preds = np.ones(len(y_test))  # constant overrun_factor = 1.0, no fitting
+    test_metrics["naive_baseline"] = {
+        "rmse": metrics_mod.rmse(y_test, naive_preds),
+        "mae": metrics_mod.mae(y_test, naive_preds),
+        "mape": metrics_mod.mape(y_test, naive_preds),
+    }
     for result in (lr_result, rf_result, xgb_result):
         preds = result.pipeline.predict(X_test)
         test_metrics[result.name] = {
@@ -94,6 +103,23 @@ def summarize(values: list) -> str:
     mean = statistics.mean(values)
     std = statistics.stdev(values) if len(values) > 1 else 0.0
     return f"{mean:.4f} ± {std:.4f}  (min {min(values):.4f}, max {max(values):.4f})"
+
+
+def paired_beats_baseline(candidate: list, baseline: list) -> dict:
+    """One-sided paired test: is `candidate` significantly lower (better)
+    than `baseline` across the same seeds? Wilcoxon signed-rank is the
+    primary test (n=10, no normality assumption); paired t-test reported
+    alongside for reference."""
+    w_stat, w_p = stats.wilcoxon(candidate, baseline, alternative="less")
+    t_stat, t_p = stats.ttest_rel(candidate, baseline, alternative="less")
+    return {
+        "candidate_mean": statistics.mean(candidate),
+        "baseline_mean": statistics.mean(baseline),
+        "wilcoxon_stat": float(w_stat),
+        "wilcoxon_p": float(w_p),
+        "ttest_stat": float(t_stat),
+        "ttest_p": float(t_p),
+    }
 
 
 def main():
@@ -142,6 +168,28 @@ def main():
     print(f"  overall:     {summarize([r['coverage'] for r in results])}")
     print(f"  first half:  {summarize([r['coverage_first_half'] for r in results])}")
     print(f"  second half: {summarize([r['coverage_second_half'] for r in results])}")
+
+    print(
+        "\n=== Does Linear Regression beat the naive baseline "
+        "(overrun_factor = 1.0, no fitting)? ==="
+    )
+    print("H1: linear_regression metric < naive_baseline metric, paired by seed. alpha=0.05\n")
+    alpha = 0.05
+    all_significant = True
+    for metric in ("rmse", "mae", "mape"):
+        lr_vals = [r["test_metrics"]["linear_regression"][metric] for r in results]
+        naive_vals = [r["test_metrics"]["naive_baseline"][metric] for r in results]
+        t = paired_beats_baseline(lr_vals, naive_vals)
+        verdict = "SIGNIFICANT" if t["wilcoxon_p"] < alpha else "not significant"
+        all_significant &= t["wilcoxon_p"] < alpha
+        print(
+            f"  {metric}: LR={t['candidate_mean']:.4f} vs naive={t['baseline_mean']:.4f} "
+            f"| Wilcoxon p={t['wilcoxon_p']:.4f}  paired-t p={t['ttest_p']:.4f}  -> {verdict}"
+        )
+    print(
+        f"\n  Linear Regression {'DOES' if all_significant else 'does NOT'} significantly "
+        f"outperform the naive baseline on all three metrics (alpha={alpha})."
+    )
 
 
 if __name__ == "__main__":
