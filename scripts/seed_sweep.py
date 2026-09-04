@@ -73,20 +73,23 @@ def run_one_seed(seed: int, scratch_dir: Path) -> dict:
         y_test.iloc[mid:], lower[mid:], upper[mid:]
     )
 
-    test_metrics = {}
-    naive_preds = np.ones(len(y_test))  # constant overrun_factor = 1.0, no fitting
-    test_metrics["naive_baseline"] = {
-        "rmse": metrics_mod.rmse(y_test, naive_preds),
-        "mae": metrics_mod.mae(y_test, naive_preds),
-        "mape": metrics_mod.mape(y_test, naive_preds),
-    }
-    for result in (lr_result, rf_result, xgb_result):
-        preds = result.pipeline.predict(X_test)
-        test_metrics[result.name] = {
-            "rmse": metrics_mod.rmse(y_test, preds),
-            "mae": metrics_mod.mae(y_test, preds),
-            "mape": metrics_mod.mape(y_test, preds),
+    def half_split_metrics(y_true, preds) -> dict:
+        return {
+            "rmse": metrics_mod.rmse(y_true, preds),
+            "mae": metrics_mod.mae(y_true, preds),
+            "mape": metrics_mod.mape(y_true, preds),
         }
+
+    test_metrics = {}
+    test_metrics_first_half = {}
+    test_metrics_second_half = {}
+    naive_preds = np.ones(len(y_test))  # constant overrun_factor = 1.0, no fitting
+    named_preds = [("naive_baseline", naive_preds)]
+    named_preds += [(result.name, result.pipeline.predict(X_test)) for result in (lr_result, rf_result, xgb_result)]
+    for name, preds in named_preds:
+        test_metrics[name] = half_split_metrics(y_test, preds)
+        test_metrics_first_half[name] = half_split_metrics(y_test.iloc[:mid], preds[:mid])
+        test_metrics_second_half[name] = half_split_metrics(y_test.iloc[mid:], preds[mid:])
 
     return {
         "seed": seed,
@@ -96,6 +99,8 @@ def run_one_seed(seed: int, scratch_dir: Path) -> dict:
         "coverage_first_half": coverage_first_half,
         "coverage_second_half": coverage_second_half,
         "test_metrics": test_metrics,
+        "test_metrics_first_half": test_metrics_first_half,
+        "test_metrics_second_half": test_metrics_second_half,
     }
 
 
@@ -115,6 +120,22 @@ def paired_beats_baseline(candidate: list, baseline: list) -> dict:
     return {
         "candidate_mean": statistics.mean(candidate),
         "baseline_mean": statistics.mean(baseline),
+        "wilcoxon_stat": float(w_stat),
+        "wilcoxon_p": float(w_p),
+        "ttest_stat": float(t_stat),
+        "ttest_p": float(t_p),
+    }
+
+
+def paired_second_worse_than_first(second_half: list, first_half: list) -> dict:
+    """One-sided paired test: is `second_half` error significantly higher
+    (worse) than `first_half`, across the same seeds? Tests for concept
+    drift / accuracy degradation over the chronological test period."""
+    w_stat, w_p = stats.wilcoxon(second_half, first_half, alternative="greater")
+    t_stat, t_p = stats.ttest_rel(second_half, first_half, alternative="greater")
+    return {
+        "first_half_mean": statistics.mean(first_half),
+        "second_half_mean": statistics.mean(second_half),
         "wilcoxon_stat": float(w_stat),
         "wilcoxon_p": float(w_p),
         "ttest_stat": float(t_stat),
@@ -168,6 +189,30 @@ def main():
     print(f"  overall:     {summarize([r['coverage'] for r in results])}")
     print(f"  first half:  {summarize([r['coverage_first_half'] for r in results])}")
     print(f"  second half: {summarize([r['coverage_second_half'] for r in results])}")
+
+    print(
+        "\n=== Accuracy by chronological test half, across "
+        f"{len(SEEDS)} seeds (concept drift check) ==="
+    )
+    print(
+        "H1: second-half error > first-half error, paired by seed. "
+        "alpha=0.05 (one-sided: tests for degradation only)\n"
+    )
+    alpha = 0.05
+    for name in model_names:
+        print(f"[{name}]")
+        for metric in ("rmse", "mae", "mape"):
+            first_vals = [r["test_metrics_first_half"][name][metric] for r in results]
+            second_vals = [r["test_metrics_second_half"][name][metric] for r in results]
+            print(f"  {metric}: first  {summarize(first_vals)}")
+            print(f"  {metric}: second {summarize(second_vals)}")
+            t = paired_second_worse_than_first(second_vals, first_vals)
+            verdict = "DEGRADES (significant)" if t["wilcoxon_p"] < alpha else "no significant degradation"
+            print(
+                f"           Wilcoxon p={t['wilcoxon_p']:.4f}  paired-t p={t['ttest_p']:.4f}"
+                f"  -> {verdict}"
+            )
+        print()
 
     print(
         "\n=== Does Linear Regression beat the naive baseline "
