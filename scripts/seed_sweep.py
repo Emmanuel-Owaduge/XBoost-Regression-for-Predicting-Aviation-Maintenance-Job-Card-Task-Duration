@@ -191,6 +191,26 @@ def main():
     print(f"  second half: {summarize([r['coverage_second_half'] for r in results])}")
 
     print(
+        "\n=== Conformal coverage by chronological test half, per seed "
+        "(coverage degradation check) ==="
+    )
+    print(
+        "H1: second-half coverage < first-half coverage, paired by seed. "
+        "alpha=0.05 (one-sided: tests for degradation only)\n"
+    )
+    alpha = 0.05
+    cov_first = [r["coverage_first_half"] for r in results]
+    cov_second = [r["coverage_second_half"] for r in results]
+    for seed, f, s in zip(SEEDS, cov_first, cov_second):
+        print(f"  seed {seed:>8}: first={f:.4f}  second={s:.4f}  diff={s - f:+.4f}")
+    cov_t = paired_beats_baseline(cov_second, cov_first)
+    cov_verdict = "DEGRADES (significant)" if cov_t["wilcoxon_p"] < alpha else "no significant degradation"
+    print(
+        f"\n  Wilcoxon p={cov_t['wilcoxon_p']:.10f}  paired-t p={cov_t['ttest_p']:.10f}"
+        f"  -> {cov_verdict}"
+    )
+
+    print(
         "\n=== Accuracy by chronological test half, across "
         f"{len(SEEDS)} seeds (concept drift check) ==="
     )
