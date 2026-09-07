@@ -73,11 +73,11 @@ def main():
     lr_result = sanity.probe_result
     print(f"      Duan smearing_factor={lr_result.best_params['smearing_factor']:.4f}")
 
-    print("[5/10] Fitting Random Forest (k-fold CV grid search)...")
+    print("[5/10] Fitting Random Forest (TimeSeriesSplit CV grid search)...")
     rf_result = rf_model.fit_tuned(X_train, y_train)
     print(f"      best_params={rf_result.best_params}")
 
-    print("[6/10] Fitting XGBoost (k-fold CV grid search)...")
+    print("[6/10] Fitting XGBoost (TimeSeriesSplit CV grid search)...")
     xgb_result = xgb_model.fit_tuned(X_train, y_train)
     print(f"      best_params={xgb_result.best_params}")
 
