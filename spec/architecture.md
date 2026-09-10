@@ -244,7 +244,7 @@ estimator is `LinearRegression`, `RandomForestRegressor`, or `XGBRegressor`.
 ### `models/linear.py`, `random_forest.py`, `xgboost_model.py`
 Each exposes:
 ```python
-def fit_tuned(X_train: pd.DataFrame, y_train: pd.Series, cv: int = CV_FOLDS) -> ModelResult
+def fit_tuned(X_train: pd.DataFrame, y_train: pd.Series, cv=TimeSeriesSplit(n_splits=5)) -> ModelResult
 ```
 `linear.py` does a plain `.fit()` (no grid search — no hyperparameters to
 tune per spec), but fits on `log(overrun_factor)` rather than the raw
@@ -265,12 +265,12 @@ splits don't carry OLS's distributional assumption, so they don't need the
 same fix.
 `random_forest.py` and `xgboost_model.py` wrap
 `GridSearchCV(pipeline, param_grid, cv=cv, scoring="neg_root_mean_squared_error")`
-— note `cv` here is a **plain k-fold** over the training partition (already
-chronologically the earliest 70%), not a further time-respecting split;
-this is consistent with the spec's constraint (grid search CV within the
-training partition) but is worth naming explicitly, since k-fold shuffles
-within that partition rather than preserving order at the fold level (see
-§5 trade-offs).
+— `cv` is `TimeSeriesSplit(n_splits=5)` over the training partition (already
+chronologically the earliest 70%), an expanding-window scheme: each fold
+trains on a strictly larger, always-earlier contiguous block than the
+single later block it validates against, so no fold's training data can
+follow its own validation data chronologically (see §5 trade-offs; this
+replaced an earlier plain k-fold CV).
 
 ### `diagnostics/sanity_check.py`
 ```python
@@ -349,16 +349,17 @@ testable in isolation given the right inputs.
   memorize individuals instead of generalizing from the derived features.
   `day_of_week` remains as the appropriate cyclical/contextual proxy from
   the original feature list.
-- **k-fold CV inside a chronological training partition still shuffles
-  within that partition** — the spec fixes grid-search tuning as k-fold CV
-  within training (not nested time-series CV), and the training partition
-  is itself already the earliest 70% of records. This is consistent with
-  the spec, but worth naming: individual CV folds do not preserve
-  within-training chronological order, so hyperparameter selection is not
-  fully "causal" at the fold level even though the outer train/cal/test
-  split is. Accepted as the simpler design the spec calls for; a
-  time-series-aware CV (e.g. `TimeSeriesSplit`) would be the alternative if
-  stricter temporal discipline were required at every level.
+- **Grid-search tuning uses `TimeSeriesSplit(n_splits=5)` within the
+  training partition, not plain k-fold** — the training partition is
+  already the earliest 70% of records, but plain k-fold CV within it would
+  still shuffle across folds, so a fold's training rows could chronologically
+  follow its own validation rows. `TimeSeriesSplit`'s expanding-window
+  scheme closes that gap: each fold trains on a strictly larger,
+  always-earlier contiguous block than the single later block it validates
+  against, so hyperparameter selection is causal at the fold level as well
+  as at the outer train/cal/test split level. This replaced an earlier
+  plain-k-fold design once the gap above was identified; see the
+  dissertation's Chapter 3 §3.8.2 and Chapter 4 §4.3 for the full account.
 - **Calibration set is chronologically after training, not exchangeable
   with training in the usual conformal-prediction sense** — standard split
   conformal assumes calibration and test data are exchangeable with each
